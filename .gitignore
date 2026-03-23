@@ -1,0 +1,30 @@
+# Local environment files
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local databases and runtime data
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test / temporary output
+*.log
+*.tmp
+feishu_tokens.dat
+feishu_tokens.*
+
