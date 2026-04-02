@@ -3,7 +3,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
+from datetime import datetime, timezone, timedelta
 import requests
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -43,6 +43,7 @@ class Feishu:
         cache_file: Path = TOKEN_CACHE_FILE,
         request_timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
     ) -> None:
+        self.tenant_access_token = None
         self.app_id = app_id
         self.app_secret = app_secret
         self.preferred_calendar_id = calendar_id
@@ -190,7 +191,7 @@ class Feishu:
 
     def get_events(self, tenant_access_token: str, calendar_id: str) -> Tuple[List[Dict[str, Any]], Optional[Exception]]:
         """获取指定日历的日程列表。"""
-        headers = self._auth_headers(tenant_access_token)
+        headers = self._auth_headers(self.tenant_access_token)
         url = CALENDAR_EVENTS_URL.format(calendar_id=calendar_id)
 
         events: List[Dict[str, Any]] = []
@@ -215,15 +216,28 @@ class Feishu:
 
         return events, None
 
-    def create_event(self, tenant_access_token: str, calendar_id: str) -> Tuple[Dict[str, Any], Optional[Exception]]:
+    def create_event(self, schedule_payload: str) -> Tuple[Dict[str, Any], Optional[Exception]]:
         """创建日程。"""
-        start_timestamp = parse_timestamp(self.start_time, "START_TIME")
-        end_timestamp = parse_timestamp(self.end_time, "END_TIME")
+        token, err = self.get_tenant_access_token()
+        if err:
+            return {}, Exception(f"获取 tenant_access_token 失败: {err}")
+        self.tenant_access_token = token
+
+        tz = timezone(timedelta(hours=8))  # UTC+8
+        dt = datetime.strptime(schedule_payload["start_time"], "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+        self.start_time=str(int(dt.timestamp()))
+
+        dt = datetime.strptime(schedule_payload["end_time"], "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+        self.end_time = str(int(dt.timestamp()))
+
+        self.summary=schedule_payload["title"];
+        start_timestamp = parse_timestamp(self.start_time, "start_time")
+        end_timestamp = parse_timestamp(self.end_time, "end_time")
         if start_timestamp >= end_timestamp:
             return {}, Exception("START_TIME 必须早于 END_TIME")
 
-        url = CALENDAR_EVENTS_URL.format(calendar_id=calendar_id)
-        headers = self._auth_headers(tenant_access_token)
+        url = CALENDAR_EVENTS_URL.format(calendar_id=self.preferred_calendar_id)
+        headers = self._auth_headers(self.tenant_access_token)
         payload = {
             "summary": self.summary,
             "start_time": {
@@ -266,7 +280,7 @@ class Feishu:
             print(f"[错误] {config_error}", file=sys.stderr)
             return 1
 
-        tenant_access_token, err = self.get_tenant_access_token()
+        self.tenant_access_token, err = self.get_tenant_access_token()
         if err:
             print(f"[错误] {err}", file=sys.stderr)
             return 1
