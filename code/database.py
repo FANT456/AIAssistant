@@ -6,13 +6,12 @@ import json
 import sqlite3
 import os
 from datetime import datetime
-from config import DB_PATH
 
 
 class ChatDatabase:
     """对话数据库管理"""
 
-    def __init__(self, db_path: str = DB_PATH):
+    def __init__(self, db_path: str = "./chat_history.db"):
         self.db_path = db_path
         self._init_db()
 

@@ -4,25 +4,53 @@ LLM 客户端模块 - 与 Ollama 交互
 """
 
 import json
+import os
+from datetime import datetime
+
 import requests
-from config import (
-    OLLAMA_API_CHAT,
-    OLLAMA_API_TAGS,
-    MODEL_NAME,
-    SYSTEM_PROMPT,
-    SCHEDULE_EXTRACTION_PROMPT,
-    MAX_CONTEXT_ROUNDS,
-)
+# from config import (
+#     OLLAMA_API_CHAT,
+#     OLLAMA_API_TAGS,
+#     MODEL_NAME,
+#     SYSTEM_PROMPT,
+#     SCHEDULE_EXTRACTION_PROMPT,
+#     MAX_CONTEXT_ROUNDS,
+# )
 
 
 class LLMClient:
     """Ollama 大模型客户端"""
 
-    def __init__(self, model: str = MODEL_NAME):
-        self.model = model
-        self.api_url = OLLAMA_API_CHAT
+    def __init__(self):
+        self.model = "qwen3:8b"
+        self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.api_url = f"{self.OLLAMA_BASE_URL}/api/chat"
         self.last_request_failed = False
         self.last_error_message = ""
+        self.SYSTEM_PROMPT= (
+            "你是一个本地 AI 助手，负责与用户进行自然语言对话。"
+            "请用简洁、准确、友好的方式回答用户的问题。"
+            "如果不确定，请如实告知。"
+        )
+        self.MAX_CONTEXT_ROUNDS=10
+        self.SCHEDULE_EXTRACTION_PROMPT= """
+            你是一个日程信息抽取助手。你的任务是从用户提供的中文文本中提取日程信息，并严格输出一个 JSON 对象。
+            
+            要求：
+            1. 只输出 JSON，不要输出 Markdown，不要输出解释。
+            2. JSON 字段固定为：
+               title, start_time, end_time, timezone, location, attendees, description
+            3. 时间格式必须为 "YYYY-MM-DD HH:MM"。
+            4. timezone 默认输出 "Asia/Shanghai"。
+            5. attendees 必须是字符串数组。
+            6. 如果某个字段无法确定：
+               - title 尽量根据会议主题提炼，实在无法判断时填 "未命名日程"
+               - end_time 填 null
+               - location 填空字符串
+               - attendees 填空数组
+               - description 尽量保留原始关键信息摘要
+            7. 如果文本里包含多个事件，只提取最核心的一条。
+            """.strip()
 
     def _mark_request_success(self):
         """标记最近一次请求成功"""
@@ -37,7 +65,7 @@ class LLMClient:
     def check_connection(self) -> bool:
         """检查 Ollama 服务是否可用"""
         try:
-            resp = requests.get(OLLAMA_API_TAGS, timeout=5)
+            resp = requests.get(f"{self.OLLAMA_BASE_URL}/api/tags", timeout=5)
             return resp.status_code == 200
         except requests.ConnectionError:
             return False
@@ -45,7 +73,7 @@ class LLMClient:
     def get_available_models(self) -> list[str]:
         """获取 Ollama 已安装的模型列表"""
         try:
-            resp = requests.get(OLLAMA_API_TAGS, timeout=5)
+            resp = requests.get(f"{self.OLLAMA_BASE_URL}/api/tags", timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 return [m["name"] for m in data.get("models", [])]
@@ -60,10 +88,10 @@ class LLMClient:
         :param history: 历史消息 [{"role": ..., "content": ...}, ...]
         :return: 完整消息列表（含 system prompt）
         """
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
 
         # 添加历史上下文（最近 N 轮）
-        context_messages = history[-(MAX_CONTEXT_ROUNDS * 2):]
+        context_messages = history[-(self.MAX_CONTEXT_ROUNDS * 2):]
         messages.extend(context_messages)
 
         # 添加当前用户输入
@@ -73,8 +101,13 @@ class LLMClient:
 
     def _build_schedule_messages(self, source_text: str) -> list[dict]:
         """构建日程抽取请求消息"""
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        system_with_time = (
+            f"当前时间是：{now_str}（Asia/Shanghai）。\n\n"
+            + self.SCHEDULE_EXTRACTION_PROMPT
+        )
         return [
-            {"role": "system", "content": SCHEDULE_EXTRACTION_PROMPT},
+            {"role": "system", "content": system_with_time},
             {
                 "role": "user",
                 "content": (
@@ -191,4 +224,3 @@ class LLMClient:
             error_message = f"[错误] 日程抽取失败: {e}"
             self._mark_request_failure(error_message)
             return error_message
-

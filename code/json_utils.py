@@ -9,7 +9,6 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
-from config import DEFAULT_EVENT_DURATION_MINUTES, DEFAULT_TIMEZONE
 
 SUPPORTED_DATETIME_FORMATS = (
     "%Y-%m-%d %H:%M",
@@ -82,7 +81,7 @@ def normalize_schedule_json(raw_text: str, source_text: str = "") -> dict[str, A
     data = extract_json_block(raw_text)
 
     title = str(data.get("title") or "未命名日程").strip() or "未命名日程"
-    timezone = str(data.get("timezone") or DEFAULT_TIMEZONE).strip() or DEFAULT_TIMEZONE
+    timezone = "Asia/Shanghai"
     location = str(data.get("location") or "").strip()
     description = str(data.get("description") or title).strip() or title
 
@@ -99,7 +98,7 @@ def normalize_schedule_json(raw_text: str, source_text: str = "") -> dict[str, A
 
     end_time_raw = data.get("end_time")
     if end_time_raw in (None, "", "null"):
-        end_dt = start_dt + timedelta(minutes=DEFAULT_EVENT_DURATION_MINUTES)
+        end_dt = start_dt + timedelta(minutes=60)
     else:
         end_dt = _parse_datetime(str(end_time_raw).strip())
 
