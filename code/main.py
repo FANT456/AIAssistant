@@ -120,10 +120,10 @@ def process_schedule_text(
         #     error_message=str(err),
         # )
         return
-    if create_result.creat_time is not None:
+    if create_result.get("create_time") is not None:
         print("[成功] 已写入飞书日历 ✓")
-        if create_result.event_id:
-            print(f"  event_id: {create_result.event_id}")
+        if create_result.get("event_id"):
+            print(f"  event_id: {create_result.get('event_id')}")
         print()
         db.save_schedule_record(
             input_type=input_type,
@@ -131,7 +131,7 @@ def process_schedule_text(
             source_text=clean_text,
             extracted_json=schedule_payload,
             status="success",
-            feishu_event_id=create_result.event_id,
+            feishu_event_id=create_result.get("event_id"),
         )
     else:
         print(f"[错误] {create_result.error_message}\n")
@@ -141,7 +141,7 @@ def process_schedule_text(
             source_text=clean_text,
             extracted_json=schedule_payload,
             status="feishu_failed",
-            error_message=create_result.error_message,
+            error_message=create_result.get("msg"),
         )
 
 
